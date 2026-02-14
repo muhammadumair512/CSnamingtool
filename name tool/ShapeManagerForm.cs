@@ -35,6 +35,7 @@ namespace name_tool
         private Button btnGroup, btnUngroup, btnDelete, btnSelectAll;
         private Button btnMatchWidth, btnMatchHeight, btnSwap, btnSelectSameType;
         private Button btnHideAll, btnShowAll;
+        private Button btnToFront, btnToBack, btnCenterH, btnCenterV;
         
         // State
         private Dictionary<int, Office.MsoTriState> originalVisibility = new Dictionary<int, Office.MsoTriState>();
@@ -52,21 +53,22 @@ namespace name_tool
         private void InitializeComponent()
         {
             this.Text = "Advanced Shape Manager Pro";
-            this.Size = new Size(600, 950);
-            this.MinimumSize = new Size(550, 750);
+            // Reduced width for a more compact sidebar feel
+            this.Size = new Size(450, 920);
+            this.MinimumSize = new Size(420, 700);
             this.ShowIcon = false;
 
             TableLayoutPanel mainLayout = new TableLayoutPanel();
             mainLayout.Dock = DockStyle.Fill;
             mainLayout.RowCount = 5;
-            mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 40f)); // Search
+            mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 35f)); // Search
             mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100f)); // List
-            mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 110f)); // Layout
-            mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 150f)); // Advanced Efficiency
-            mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 60f));  // Options
+            mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 125f)); // Layout
+            mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 185f)); // Efficiency
+            mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 50f));  // Options
             this.Controls.Add(mainLayout);
 
-            Panel searchPanel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(5) };
+            Panel searchPanel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(3) };
             txtSearch = new TextBox { Dock = DockStyle.Fill };
             txtSearch.TextChanged += (s, e) => FilterShapes();
             searchPanel.Controls.Add(txtSearch);
@@ -81,11 +83,11 @@ namespace name_tool
             lstShapes.GridLines = true;
             lstShapes.LabelEdit = true; 
             
-            lstShapes.Columns.Add("Z", 40);
-            lstShapes.Columns.Add("Shape Name", 220);
-            lstShapes.Columns.Add("Type", 90);
-            lstShapes.Columns.Add("W", 50);
-            lstShapes.Columns.Add("H", 50);
+            lstShapes.Columns.Add("Z", 35);
+            lstShapes.Columns.Add("Shape Name", 160);
+            lstShapes.Columns.Add("Type", 80);
+            lstShapes.Columns.Add("W", 45);
+            lstShapes.Columns.Add("H", 45);
             
             lstShapes.SelectedIndexChanged += LstShapes_SelectedIndexChanged;
             lstShapes.AfterLabelEdit += LstShapes_AfterLabelEdit;
@@ -97,48 +99,58 @@ namespace name_tool
             
             mainLayout.Controls.Add(lstShapes, 0, 1);
 
-            GroupBox grpAlign = new GroupBox { Text = "Layout & Distribution", Dock = DockStyle.Fill, Margin = new Padding(5) };
-            FlowLayoutPanel flowAlign = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight };
+            // Group 1: Layout & Distribution
+            GroupBox grpAlign = new GroupBox { Text = "Layout & Distribution", Dock = DockStyle.Fill, Margin = new Padding(3) };
+            FlowLayoutPanel flowAlign = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = true };
             grpAlign.Controls.Add(flowAlign);
             mainLayout.Controls.Add(grpAlign, 0, 2);
 
-            flowAlign.Controls.Add(CreateToolButton("Left", (s, e) => AlignSelected(Office.MsoAlignCmd.msoAlignLefts)));
-            flowAlign.Controls.Add(CreateToolButton("Center", (s, e) => AlignSelected(Office.MsoAlignCmd.msoAlignCenters)));
-            flowAlign.Controls.Add(CreateToolButton("Right", (s, e) => AlignSelected(Office.MsoAlignCmd.msoAlignRights)));
-            flowAlign.Controls.Add(CreateToolButton("Top", (s, e) => AlignSelected(Office.MsoAlignCmd.msoAlignTops)));
-            flowAlign.Controls.Add(CreateToolButton("Middle", (s, e) => AlignSelected(Office.MsoAlignCmd.msoAlignMiddles)));
-            flowAlign.Controls.Add(CreateToolButton("Bottom", (s, e) => AlignSelected(Office.MsoAlignCmd.msoAlignBottoms)));
-            flowAlign.Controls.Add(CreateToolButton("Dist H", (s, e) => DistributeSelected(Office.MsoDistributeCmd.msoDistributeHorizontally)));
-            flowAlign.Controls.Add(CreateToolButton("Dist V", (s, e) => DistributeSelected(Office.MsoDistributeCmd.msoDistributeVertically)));
+            btnAlignLeft = CreateToolButton("Left", (s, e) => AlignSelected(Office.MsoAlignCmd.msoAlignLefts));
+            btnAlignCenter = CreateToolButton("Center", (s, e) => AlignSelected(Office.MsoAlignCmd.msoAlignCenters));
+            btnAlignRight = CreateToolButton("Right", (s, e) => AlignSelected(Office.MsoAlignCmd.msoAlignRights));
+            btnAlignTop = CreateToolButton("Top", (s, e) => AlignSelected(Office.MsoAlignCmd.msoAlignTops));
+            btnAlignMiddle = CreateToolButton("Middle", (s, e) => AlignSelected(Office.MsoAlignCmd.msoAlignMiddles));
+            btnAlignBottom = CreateToolButton("Bottom", (s, e) => AlignSelected(Office.MsoAlignCmd.msoAlignBottoms));
+            btnDistributeH = CreateToolButton("Dist H", (s, e) => DistributeSelected(Office.MsoDistributeCmd.msoDistributeHorizontally));
+            btnDistributeV = CreateToolButton("Dist V", (s, e) => DistributeSelected(Office.MsoDistributeCmd.msoDistributeVertically));
+            btnCenterH = CreateToolButton("Ctr Slid H", (s, e) => AlignSelected(Office.MsoAlignCmd.msoAlignCenters, true));
+            btnCenterV = CreateToolButton("Ctr Slid V", (s, e) => AlignSelected(Office.MsoAlignCmd.msoAlignMiddles, true));
 
-            GroupBox grpAdvanced = new GroupBox { Text = "Advanced Efficiency Tools", Dock = DockStyle.Fill, Margin = new Padding(5) };
-            FlowLayoutPanel flowAdvanced = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight };
+            flowAlign.Controls.AddRange(new Control[] { btnAlignLeft, btnAlignCenter, btnAlignRight, btnAlignTop, btnAlignMiddle, btnAlignBottom, btnDistributeH, btnDistributeV, btnCenterH, btnCenterV });
+
+            // Group 2: Advanced Efficiency Tools
+            GroupBox grpAdvanced = new GroupBox { Text = "Industrial Efficiency Tools", Dock = DockStyle.Fill, Margin = new Padding(3) };
+            FlowLayoutPanel flowAdvanced = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = true };
             grpAdvanced.Controls.Add(flowAdvanced);
             mainLayout.Controls.Add(grpAdvanced, 0, 3);
 
-            flowAdvanced.Controls.Add(CreateToolButton("Match W", (s, e) => MatchSize(true, false)));
-            flowAdvanced.Controls.Add(CreateToolButton("Match H", (s, e) => MatchSize(false, true)));
-            flowAdvanced.Controls.Add(CreateToolButton("Swap Pos", (s, e) => SwapShapes()));
-            flowAdvanced.Controls.Add(CreateToolButton("Same Type", (s, e) => SelectSameType()));
-            flowAdvanced.Controls.Add(CreateToolButton("Select All", (s, e) => SelectAllShapes()));
-            flowAdvanced.Controls.Add(CreateToolButton("Group", (s, e) => GroupSelected()));
-            flowAdvanced.Controls.Add(CreateToolButton("Ungroup", (s, e) => UngroupSelected()));
+            btnMatchWidth = CreateToolButton("Match W", (s, e) => MatchSize(true, false));
+            btnMatchHeight = CreateToolButton("Match H", (s, e) => MatchSize(false, true));
+            btnSwap = CreateToolButton("Swap Pos", (s, e) => SwapShapes());
+            btnSelectSameType = CreateToolButton("Same Type", (s, e) => SelectSameType());
+            btnSelectAll = CreateToolButton("Sel All", (s, e) => SelectAllShapes());
+            btnToFront = CreateToolButton("Front", (s, e) => ZOrderExtreme(Office.MsoZOrderCmd.msoBringToFront));
+            btnToBack = CreateToolButton("Back", (s, e) => ZOrderExtreme(Office.MsoZOrderCmd.msoSendToBack));
+            btnGroup = CreateToolButton("Group", (s, e) => GroupSelected());
+            btnUngroup = CreateToolButton("Ungroup", (s, e) => UngroupSelected());
+            btnHideAll = CreateToolButton("Hide All", (s, e) => ToggleAllVisibility(false));
+            btnShowAll = CreateToolButton("Show All", (s, e) => ToggleAllVisibility(true));
             btnDelete = CreateToolButton("Delete", (s, e) => DeleteSelected());
             btnDelete.BackColor = Color.MistyRose;
-            flowAdvanced.Controls.Add(btnDelete);
-            flowAdvanced.Controls.Add(CreateToolButton("Hide All", (s, e) => ToggleAllVisibility(false)));
-            flowAdvanced.Controls.Add(CreateToolButton("Show All", (s, e) => ToggleAllVisibility(true)));
 
-            FlowLayoutPanel flowOptions = new FlowLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(5) };
+            flowAdvanced.Controls.AddRange(new Control[] { btnMatchWidth, btnMatchHeight, btnSwap, btnSelectSameType, btnSelectAll, btnToFront, btnToBack, btnGroup, btnUngroup, btnHideAll, btnShowAll, btnDelete });
+
+            // Options Panel
+            FlowLayoutPanel flowOptions = new FlowLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(3), FlowDirection = FlowDirection.LeftToRight };
             mainLayout.Controls.Add(flowOptions, 0, 4);
 
-            chkFocusMode = new CheckBox { Text = "Focus Mode", AutoSize = true, Margin = new Padding(5) };
+            chkFocusMode = new CheckBox { Text = "Focus", AutoSize = true, Margin = new Padding(5, 2, 5, 2) };
             chkFocusMode.CheckedChanged += (s, e) => ApplyVisibility();
             
-            chkInverse = new CheckBox { Text = "Inverse", AutoSize = true, Margin = new Padding(5) };
+            chkInverse = new CheckBox { Text = "Inverse", AutoSize = true, Margin = new Padding(5, 2, 5, 2) };
             chkInverse.CheckedChanged += (s, e) => ApplyVisibility();
 
-            btnRefresh = new Button { Text = "Refresh List", AutoSize = true, FlatStyle = FlatStyle.System };
+            btnRefresh = new Button { Text = "Refresh", AutoSize = true, FlatStyle = FlatStyle.System, Margin = new Padding(5, 0, 5, 0) };
             btnRefresh.Click += (s, e) => LoadShapes();
 
             flowOptions.Controls.AddRange(new Control[] { chkFocusMode, chkInverse, btnRefresh });
@@ -146,7 +158,8 @@ namespace name_tool
 
         private Button CreateToolButton(string text, EventHandler onClick)
         {
-            Button btn = new Button { Text = text, Width = 65, Height = 30, Margin = new Padding(2), FlatStyle = FlatStyle.Flat };
+            // Narrower buttons for a tighter layout
+            Button btn = new Button { Text = text, Width = 60, Height = 28, Margin = new Padding(1), FlatStyle = FlatStyle.Flat, Font = new Font("Segoe UI", 7.5f) };
             btn.Click += onClick;
             return btn;
         }
@@ -165,50 +178,26 @@ namespace name_tool
         public void SyncSelectionFromPowerPoint(PowerPoint.Selection sel)
         {
             if (isInternalChange) return;
-            
-            if (this.InvokeRequired)
-            {
-                this.Invoke(new Action(() => SyncSelectionFromPowerPoint(sel)));
-                return;
-            }
+            if (this.InvokeRequired) { this.Invoke(new Action(() => SyncSelectionFromPowerPoint(sel))); return; }
 
-            try
-            {
+            try {
                 isInternalChange = true;
                 lstShapes.SelectedIndexChanged -= LstShapes_SelectedIndexChanged;
                 
                 HashSet<int> selectedIds = new HashSet<int>();
-                if (sel != null && sel.Type == PowerPoint.PpSelectionType.ppSelectionShapes)
-                {
-                    foreach (PowerPoint.Shape shape in sel.ShapeRange)
-                    {
-                        try { selectedIds.Add(shape.Id); } catch { }
-                    }
+                if (sel != null && sel.Type == PowerPoint.PpSelectionType.ppSelectionShapes) {
+                    foreach (PowerPoint.Shape s in sel.ShapeRange) try { selectedIds.Add(s.Id); } catch { }
                 }
 
                 lstShapes.BeginUpdate();
-                foreach (ListViewItem item in lstShapes.Items)
-                {
-                    if (item.Tag is PowerPoint.Shape shape)
-                    {
-                        try
-                        {
-                            bool shouldBeSelected = selectedIds.Contains(shape.Id);
-                            if (item.Selected != shouldBeSelected)
-                                item.Selected = shouldBeSelected;
-                        }
-                        catch { }
+                foreach (ListViewItem item in lstShapes.Items) {
+                    if (item.Tag is PowerPoint.Shape s) {
+                        try { bool selected = selectedIds.Contains(s.Id); if (item.Selected != selected) item.Selected = selected; } catch { }
                     }
                 }
-                
-                if (lstShapes.SelectedItems.Count > 0)
-                    lstShapes.SelectedItems[0].EnsureVisible();
-                
+                if (lstShapes.SelectedItems.Count > 0) lstShapes.SelectedItems[0].EnsureVisible();
                 lstShapes.EndUpdate();
-            }
-            catch { }
-            finally
-            {
+            } catch { } finally {
                 lstShapes.SelectedIndexChanged += LstShapes_SelectedIndexChanged;
                 isInternalChange = false;
             }
@@ -218,8 +207,7 @@ namespace name_tool
         {
             string filter = txtSearch.Text.ToLower();
             lstShapes.BeginUpdate();
-            foreach (ListViewItem item in lstShapes.Items)
-            {
+            foreach (ListViewItem item in lstShapes.Items) {
                 if (string.IsNullOrEmpty(filter)) item.BackColor = SystemColors.Window;
                 else if (item.SubItems[1].Text.ToLower().Contains(filter)) item.BackColor = Color.LightYellow;
                 else item.BackColor = SystemColors.Window;
@@ -231,162 +219,139 @@ namespace name_tool
         {
             lstShapes.BeginUpdate();
             lstShapes.Items.Clear();
-            try
-            {
+            try {
                 var slide = GetActiveSlide();
                 if (slide == null) return;
-
-                int count = 0;
-                try { count = slide.Shapes.Count; } catch { }
-
-                for (int i = count; i >= 1; i--)
-                {
-                    try
-                    {
-                        PowerPoint.Shape shape = slide.Shapes[i];
+                for (int i = slide.Shapes.Count; i >= 1; i--) {
+                    try {
+                        PowerPoint.Shape s = slide.Shapes[i];
                         ListViewItem item = new ListViewItem(i.ToString());
-                        item.SubItems.Add(shape.Name);
-                        item.SubItems.Add(shape.Type.ToString().Replace("mso", ""));
-                        item.SubItems.Add(Math.Round(shape.Width, 1).ToString());
-                        item.SubItems.Add(Math.Round(shape.Height, 1).ToString());
-                        item.Tag = shape;
+                        item.SubItems.Add(s.Name);
+                        item.SubItems.Add(s.Type.ToString().Replace("mso", ""));
+                        item.SubItems.Add(Math.Round(s.Width, 1).ToString());
+                        item.SubItems.Add(Math.Round(s.Height, 1).ToString());
+                        item.Tag = s;
                         lstShapes.Items.Add(item);
-                    }
-                    catch { continue; }
+                    } catch { continue; }
                 }
-            }
-            catch (Exception ex) { MessageBox.Show("Load Error: " + ex.Message); }
-            finally { lstShapes.EndUpdate(); }
+            } catch { } finally { lstShapes.EndUpdate(); }
         }
 
-        private void AlignSelected(Office.MsoAlignCmd alignCmd)
+        private void AlignSelected(Office.MsoAlignCmd alignCmd, bool relativeToSlideForce = false)
         {
-            try
-            {
-                if (pptApp.ActiveWindow.Selection.Type == PowerPoint.PpSelectionType.ppSelectionShapes)
-                {
-                    PowerPoint.ShapeRange range = pptApp.ActiveWindow.Selection.ShapeRange;
-                    if (range.Count > 0)
-                    {
-                        Office.MsoTriState relativeToSlide = (range.Count == 1) ? Office.MsoTriState.msoTrue : Office.MsoTriState.msoFalse;
-                        range.Align(alignCmd, relativeToSlide);
+            try {
+                if (pptApp.ActiveWindow.Selection.Type == PowerPoint.PpSelectionType.ppSelectionShapes) {
+                    var range = pptApp.ActiveWindow.Selection.ShapeRange;
+                    if (range.Count > 0) {
+                        Office.MsoTriState rel = (range.Count == 1 || relativeToSlideForce) ? Office.MsoTriState.msoTrue : Office.MsoTriState.msoFalse;
+                        range.Align(alignCmd, rel);
                     }
                 }
-            }
-            catch (Exception ex) { MessageBox.Show("Align Error: " + ex.Message); }
+            } catch { }
         }
 
         private void DistributeSelected(Office.MsoDistributeCmd distCmd)
         {
-            try
-            {
-                if (pptApp.ActiveWindow.Selection.Type == PowerPoint.PpSelectionType.ppSelectionShapes)
-                {
-                    PowerPoint.ShapeRange range = pptApp.ActiveWindow.Selection.ShapeRange;
-                    if (range.Count >= 2)
-                        range.Distribute(distCmd, Office.MsoTriState.msoFalse);
-                    else
-                        MessageBox.Show("Select at least 2 shapes.");
+            try {
+                if (pptApp.ActiveWindow.Selection.Type == PowerPoint.PpSelectionType.ppSelectionShapes) {
+                    var range = pptApp.ActiveWindow.Selection.ShapeRange;
+                    if (range.Count >= 2) range.Distribute(distCmd, Office.MsoTriState.msoFalse);
                 }
-            }
-            catch (Exception ex) { MessageBox.Show("Distribute Error: " + ex.Message); }
+            } catch { }
+        }
+
+        private void ZOrderExtreme(Office.MsoZOrderCmd cmd)
+        {
+            try {
+                if (pptApp.ActiveWindow.Selection.Type == PowerPoint.PpSelectionType.ppSelectionShapes) {
+                    pptApp.ActiveWindow.Selection.ShapeRange.ZOrder(cmd);
+                    LoadShapes();
+                }
+            } catch { }
         }
 
         private void MatchSize(bool width, bool height)
         {
-            try
-            {
-                if (pptApp.ActiveWindow.Selection.Type == PowerPoint.PpSelectionType.ppSelectionShapes)
-                {
+            try {
+                if (pptApp.ActiveWindow.Selection.Type == PowerPoint.PpSelectionType.ppSelectionShapes) {
                     var range = pptApp.ActiveWindow.Selection.ShapeRange;
                     if (range.Count < 2) return;
                     float refW = range[1].Width, refH = range[1].Height;
-                    for (int i = 2; i <= range.Count; i++)
-                    {
+                    for (int i = 2; i <= range.Count; i++) {
                         if (width) range[i].Width = refW;
                         if (height) range[i].Height = refH;
                     }
                     LoadShapes();
                 }
-            }
-            catch (Exception ex) { MessageBox.Show("Match Size Error: " + ex.Message); }
+            } catch { }
         }
 
         private void SwapShapes()
         {
-            try
-            {
-                if (pptApp.ActiveWindow.Selection.Type == PowerPoint.PpSelectionType.ppSelectionShapes)
-                {
+            try {
+                if (pptApp.ActiveWindow.Selection.Type == PowerPoint.PpSelectionType.ppSelectionShapes) {
                     var range = pptApp.ActiveWindow.Selection.ShapeRange;
-                    if (range.Count != 2) { MessageBox.Show("Select 2 shapes."); return; }
+                    if (range.Count != 2) return;
                     float tL = range[1].Left, tT = range[1].Top;
                     range[1].Left = range[2].Left; range[1].Top = range[2].Top;
                     range[2].Left = tL; range[2].Top = tT;
                 }
-            }
-            catch (Exception ex) { MessageBox.Show("Swap Error: " + ex.Message); }
+            } catch { }
         }
 
         private void SelectSameType()
         {
-            try
-            {
-                if (pptApp.ActiveWindow.Selection.Type == PowerPoint.PpSelectionType.ppSelectionShapes)
-                {
+            try {
+                if (pptApp.ActiveWindow.Selection.Type == PowerPoint.PpSelectionType.ppSelectionShapes) {
                     var type = pptApp.ActiveWindow.Selection.ShapeRange[1].Type;
                     var slide = GetActiveSlide();
                     if (slide == null) return;
                     List<string> names = new List<string>();
                     foreach (PowerPoint.Shape s in slide.Shapes) if (s.Type == type) names.Add(s.Name);
-                    if (names.Count > 0) { isInternalChange = true; slide.Shapes.Range(names.ToArray()).Select(); isInternalChange = false; SyncSelectionFromPowerPoint(pptApp.ActiveWindow.Selection); }
+                    if (names.Count > 0) {
+                        isInternalChange = true;
+                        slide.Shapes.Range(names.ToArray()).Select();
+                        isInternalChange = false;
+                        SyncSelectionFromPowerPoint(pptApp.ActiveWindow.Selection);
+                    }
                 }
-            }
-            catch (Exception ex) { MessageBox.Show("Select Type Error: " + ex.Message); }
+            } catch { }
         }
 
         private void SelectAllShapes()
         {
-            try
-            {
+            try {
                 var slide = GetActiveSlide();
                 if (slide == null || slide.Shapes.Count == 0) return;
                 isInternalChange = true;
                 slide.Shapes.SelectAll();
                 isInternalChange = false;
                 SyncSelectionFromPowerPoint(pptApp.ActiveWindow.Selection);
-            }
-            catch { }
+            } catch { }
         }
 
         private void DeleteSelected()
         {
-            try
-            {
-                if (pptApp.ActiveWindow.Selection.Type == PowerPoint.PpSelectionType.ppSelectionShapes)
-                {
-                    if (MessageBox.Show("Delete selected items?", "Confirm", MessageBoxButtons.YesNo) == DialogResult.Yes)
-                    {
+            try {
+                if (pptApp.ActiveWindow.Selection.Type == PowerPoint.PpSelectionType.ppSelectionShapes) {
+                    if (MessageBox.Show("Delete selected items?", "Confirm", MessageBoxButtons.YesNo) == DialogResult.Yes) {
                         isInternalChange = true;
                         pptApp.ActiveWindow.Selection.Delete();
                         isInternalChange = false;
                         LoadShapes();
                     }
                 }
-            }
-            catch (Exception ex) { MessageBox.Show("Delete Error: " + ex.Message); }
+            } catch { }
         }
 
         private void ToggleAllVisibility(bool visible)
         {
-            try
-            {
+            try {
                 var slide = GetActiveSlide();
                 if (slide == null) return;
                 foreach (PowerPoint.Shape s in slide.Shapes) try { s.Visible = visible ? Office.MsoTriState.msoTrue : Office.MsoTriState.msoFalse; } catch { }
                 LoadShapes();
-            }
-            catch { }
+            } catch { }
         }
 
         private void GroupSelected() { try { if (pptApp.ActiveWindow.Selection.Type == PowerPoint.PpSelectionType.ppSelectionShapes) { pptApp.ActiveWindow.Selection.ShapeRange.Group(); LoadShapes(); } } catch { } }
@@ -395,18 +360,16 @@ namespace name_tool
         private void LstShapes_AfterLabelEdit(object sender, LabelEditEventArgs e)
         {
             if (e.Label == null) return;
-            try { ListViewItem item = lstShapes.Items[e.Item]; if (item.Tag is PowerPoint.Shape s) s.Name = e.Label; } catch (Exception ex) { MessageBox.Show("Rename Error: " + ex.Message); e.CancelEdit = true; }
+            try { ListViewItem item = lstShapes.Items[e.Item]; if (item.Tag is PowerPoint.Shape s) s.Name = e.Label; } catch { e.CancelEdit = true; }
         }
 
         private PowerPoint.Slide GetActiveSlide()
         {
-            try
-            {
+            try {
                 if (pptApp.ActiveWindow == null) return null;
                 try { return (PowerPoint.Slide)pptApp.ActiveWindow.View.Slide; } catch { }
                 try { if (pptApp.ActiveWindow.Selection.Type != PowerPoint.PpSelectionType.ppSelectionNone) return (PowerPoint.Slide)pptApp.ActiveWindow.Selection.SlideRange[1]; } catch { }
-            }
-            catch { }
+            } catch { }
             return null;
         }
 
@@ -419,15 +382,13 @@ namespace name_tool
 
         private void UpdatePPSelection()
         {
-            try
-            {
+            try {
                 if (lstShapes.SelectedItems.Count == 0) { pptApp.ActiveWindow.Selection.Unselect(); return; }
                 List<string> names = new List<string>();
                 foreach (ListViewItem item in lstShapes.SelectedItems) if (item.Tag is PowerPoint.Shape s) names.Add(s.Name);
                 var slide = GetActiveSlide();
                 if (slide != null && names.Count > 0) slide.Shapes.Range(names.ToArray()).Select();
-            }
-            catch { }
+            } catch { }
         }
 
         private void ApplyVisibility()
@@ -437,8 +398,7 @@ namespace name_tool
             if (slide == null) return;
             HashSet<int> selectedIds = new HashSet<int>();
             foreach (ListViewItem item in lstShapes.SelectedItems) if (item.Tag is PowerPoint.Shape s) selectedIds.Add(s.Id);
-            foreach (PowerPoint.Shape s in slide.Shapes)
-            {
+            foreach (PowerPoint.Shape s in slide.Shapes) {
                 try {
                     if (!originalVisibility.ContainsKey(s.Id)) originalVisibility[s.Id] = s.Visible;
                     bool vis = chkInverse.Checked ? !selectedIds.Contains(s.Id) : selectedIds.Contains(s.Id);
@@ -464,15 +424,13 @@ namespace name_tool
         {
             Point cp = lstShapes.PointToClient(new Point(e.X, e.Y));
             ListViewItem targetItem = lstShapes.GetItemAt(cp.X, cp.Y);
-            if (targetItem != null)
-            {
+            if (targetItem != null) {
                 int targetIndex = targetItem.Index;
                 Rectangle itemBounds = targetItem.GetBounds(ItemBoundsPortion.Entire);
                 lstShapes.InsertionMark.AppearsAfterItem = (cp.Y > itemBounds.Top + (itemBounds.Height / 2));
                 lstShapes.InsertionMark.Index = targetIndex;
                 e.Effect = DragDropEffects.Move;
-            }
-            else { e.Effect = DragDropEffects.None; lstShapes.InsertionMark.Index = -1; }
+            } else { e.Effect = DragDropEffects.None; lstShapes.InsertionMark.Index = -1; }
         }
 
         private void LstShapes_DragDrop(object sender, DragEventArgs e)

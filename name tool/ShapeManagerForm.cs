@@ -35,7 +35,7 @@ namespace name_tool
         private Button btnGroup, btnUngroup, btnDelete, btnSelectAll;
         private Button btnMatchWidth, btnMatchHeight, btnSwap, btnSelectSameType;
         private Button btnHideAll, btnShowAll;
-        private Button btnToFront, btnToBack, btnCenterH, btnCenterV;
+        private Button btnToFront, btnToBack, btnForward, btnBackward, btnCenterH, btnCenterV;
         
         // State
         private Dictionary<int, Office.MsoTriState> originalVisibility = new Dictionary<int, Office.MsoTriState>();
@@ -53,9 +53,8 @@ namespace name_tool
         private void InitializeComponent()
         {
             this.Text = "Advanced Shape Manager Pro";
-            // Reduced width for a more compact sidebar feel
-            this.Size = new Size(450, 920);
-            this.MinimumSize = new Size(420, 700);
+            this.Size = new Size(450, 950);
+            this.MinimumSize = new Size(420, 750);
             this.ShowIcon = false;
 
             TableLayoutPanel mainLayout = new TableLayoutPanel();
@@ -64,7 +63,7 @@ namespace name_tool
             mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 35f)); // Search
             mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100f)); // List
             mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 125f)); // Layout
-            mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 185f)); // Efficiency
+            mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 220f)); // Efficiency
             mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 50f));  // Options
             this.Controls.Add(mainLayout);
 
@@ -99,7 +98,6 @@ namespace name_tool
             
             mainLayout.Controls.Add(lstShapes, 0, 1);
 
-            // Group 1: Layout & Distribution
             GroupBox grpAlign = new GroupBox { Text = "Layout & Distribution", Dock = DockStyle.Fill, Margin = new Padding(3) };
             FlowLayoutPanel flowAlign = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = true };
             grpAlign.Controls.Add(flowAlign);
@@ -118,7 +116,6 @@ namespace name_tool
 
             flowAlign.Controls.AddRange(new Control[] { btnAlignLeft, btnAlignCenter, btnAlignRight, btnAlignTop, btnAlignMiddle, btnAlignBottom, btnDistributeH, btnDistributeV, btnCenterH, btnCenterV });
 
-            // Group 2: Advanced Efficiency Tools
             GroupBox grpAdvanced = new GroupBox { Text = "Industrial Efficiency Tools", Dock = DockStyle.Fill, Margin = new Padding(3) };
             FlowLayoutPanel flowAdvanced = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = true };
             grpAdvanced.Controls.Add(flowAdvanced);
@@ -129,8 +126,10 @@ namespace name_tool
             btnSwap = CreateToolButton("Swap Pos", (s, e) => SwapShapes());
             btnSelectSameType = CreateToolButton("Same Type", (s, e) => SelectSameType());
             btnSelectAll = CreateToolButton("Sel All", (s, e) => SelectAllShapes());
-            btnToFront = CreateToolButton("Front", (s, e) => ZOrderExtreme(Office.MsoZOrderCmd.msoBringToFront));
-            btnToBack = CreateToolButton("Back", (s, e) => ZOrderExtreme(Office.MsoZOrderCmd.msoSendToBack));
+            btnToFront = CreateToolButton("To Front", (s, e) => ZOrderExtreme(Office.MsoZOrderCmd.msoBringToFront));
+            btnToBack = CreateToolButton("To Back", (s, e) => ZOrderExtreme(Office.MsoZOrderCmd.msoSendToBack));
+            btnForward = CreateToolButton("Fwd Step", (s, e) => ZOrderExtreme(Office.MsoZOrderCmd.msoBringForward));
+            btnBackward = CreateToolButton("Back Step", (s, e) => ZOrderExtreme(Office.MsoZOrderCmd.msoSendBackward));
             btnGroup = CreateToolButton("Group", (s, e) => GroupSelected());
             btnUngroup = CreateToolButton("Ungroup", (s, e) => UngroupSelected());
             btnHideAll = CreateToolButton("Hide All", (s, e) => ToggleAllVisibility(false));
@@ -138,9 +137,8 @@ namespace name_tool
             btnDelete = CreateToolButton("Delete", (s, e) => DeleteSelected());
             btnDelete.BackColor = Color.MistyRose;
 
-            flowAdvanced.Controls.AddRange(new Control[] { btnMatchWidth, btnMatchHeight, btnSwap, btnSelectSameType, btnSelectAll, btnToFront, btnToBack, btnGroup, btnUngroup, btnHideAll, btnShowAll, btnDelete });
+            flowAdvanced.Controls.AddRange(new Control[] { btnMatchWidth, btnMatchHeight, btnSwap, btnSelectSameType, btnSelectAll, btnToFront, btnToBack, btnForward, btnBackward, btnGroup, btnUngroup, btnHideAll, btnShowAll, btnDelete });
 
-            // Options Panel
             FlowLayoutPanel flowOptions = new FlowLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(3), FlowDirection = FlowDirection.LeftToRight };
             mainLayout.Controls.Add(flowOptions, 0, 4);
 
@@ -158,7 +156,6 @@ namespace name_tool
 
         private Button CreateToolButton(string text, EventHandler onClick)
         {
-            // Narrower buttons for a tighter layout
             Button btn = new Button { Text = text, Width = 60, Height = 28, Margin = new Padding(1), FlatStyle = FlatStyle.Flat, Font = new Font("Segoe UI", 7.5f) };
             btn.Click += onClick;
             return btn;

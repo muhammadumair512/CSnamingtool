@@ -147,11 +147,11 @@ namespace name_tool
             btnLine.BackColor = Color.AliceBlue;
             btnRect = CreateToolButton("Rect", (s, e) => ExecuteMso("ShapeRectangle"));
             btnRect.BackColor = Color.AliceBlue;
-            btnScribble = CreateToolButton("Scribble", (s, e) => ExecuteMso("Scribble"));
+            btnScribble = CreateToolButton("Scribble", (s, e) => ExecuteLegacyDrawingTool(409));
             btnScribble.BackColor = Color.AliceBlue;
-            btnCurve = CreateToolButton("Curve", (s, e) => ExecuteMso("Curve"));
+            btnCurve = CreateToolButton("Curve", (s, e) => ExecuteLegacyDrawingTool(1041));
             btnCurve.BackColor = Color.AliceBlue;
-            btnFreeform = CreateToolButton("Freeform", (s, e) => ExecuteMso("Freeform"));
+            btnFreeform = CreateToolButton("Freeform", (s, e) => ExecuteLegacyDrawingTool(200));
             btnFreeform.BackColor = Color.AliceBlue;
 
             flowDrawing.Controls.AddRange(new Control[] { btnLine, btnRect, btnScribble, btnCurve, btnFreeform });
@@ -201,6 +201,72 @@ namespace name_tool
             Button btn = new Button { Text = text, Width = 60, Height = 28, Margin = new Padding(1), FlatStyle = FlatStyle.Flat, Font = new Font("Segoe UI", 7.5f) };
             btn.Click += onClick;
             return btn;
+        }
+
+        private void ExecuteLegacyDrawingTool(int controlId)
+        {
+            try
+            {
+                if (pptApp.ActiveWindow == null) return;
+
+                // Ensure Normal view
+                try
+                {
+                    var viewType = pptApp.ActiveWindow.ViewType;
+                    if (viewType != PowerPoint.PpViewType.ppViewNormal &&
+                        viewType != PowerPoint.PpViewType.ppViewSlide)
+                    {
+                        pptApp.ActiveWindow.ViewType = PowerPoint.PpViewType.ppViewNormal;
+                    }
+                }
+                catch { }
+
+                // Get PowerPoint window handle
+                IntPtr pptHwnd = (IntPtr)pptApp.ActiveWindow.HWND;
+
+                // Robust focus transfer
+                uint currentThread = GetCurrentThreadId();
+                uint pptThread = GetWindowThreadProcessId(pptHwnd, IntPtr.Zero);
+
+                bool attached = false;
+                if (currentThread != pptThread)
+                {
+                    attached = AttachThreadInput(currentThread, pptThread, true);
+                }
+
+                try
+                {
+                    BringWindowToTop(pptHwnd);
+                    SetForegroundWindow(pptHwnd);
+                    SetFocus(pptHwnd);
+
+                    System.Threading.Thread.Sleep(30);
+
+                    // Use legacy FindControl with Office Control ID
+                    Office.CommandBarControl ctrl = pptApp.CommandBars.FindControl(Id: controlId);
+                    if (ctrl != null)
+                    {
+                        ctrl.Execute();
+                    }
+                    else
+                    {
+                        MessageBox.Show($"Drawing tool (ID: {controlId}) not available in this PowerPoint version.",
+                            "Tool Not Found", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }
+                }
+                finally
+                {
+                    if (attached)
+                    {
+                        AttachThreadInput(currentThread, pptThread, false);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Drawing Tool Activation Failed: {ex.Message}\n\nEnsure you have a slide open in Normal view.",
+                    "Drawing Tool Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
         }
 
         private void ExecuteMso(string idMso)

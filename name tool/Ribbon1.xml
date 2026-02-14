@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<customUI xmlns="http://schemas.microsoft.com/office/2009/07/customui" onLoad="Ribbon_Load">
+  <ribbon>
+    <tabs>
+      <tab id="tabShapeManager" label="Gemini Tools">
+        <group id="groupShapeManager" label="Shape Management">
+          <button id="btnOpenShapeManager" label="Shape Manager" 
+                  size="large" 
+                  getImage="GetImage" 
+                  onAction="OnOpenManagerClick"
+                  description="Open the advanced shape management tool to isolate and reorder objects."/>
+        </group>
+      </tab>
+    </tabs>
+  </ribbon>
+</customUI>

@@ -55,7 +55,7 @@ namespace name_tool
         private Button btnMatchWidth, btnMatchHeight, btnSwap, btnSelectSameType;
         private Button btnHideAll, btnShowAll;
         private Button btnToFront, btnToBack, btnForward, btnBackward, btnCenterH, btnCenterV;
-        private Button btnScribble, btnCurve, btnFreeform, btnRect, btnLine;
+        private Button btnFreeform, btnRect, btnLine;
 
         private Dictionary<int, Office.MsoTriState> originalVisibility = new Dictionary<int, Office.MsoTriState>();
         private bool isInternalChange = false;
@@ -143,18 +143,17 @@ namespace name_tool
             grpDrawing.Controls.Add(flowDrawing);
             mainLayout.Controls.Add(grpDrawing, 0, 3);
 
-            btnLine = CreateToolButton("Line", (s, e) => ExecuteMso("ShapeStraightConnector"));
+            btnLine = CreateToolButton("Line", (s, e) => ActivateDrawingTool(
+                new[] { "ShapeStraightConnector" }, 32, "Line"));
             btnLine.BackColor = Color.AliceBlue;
-            btnRect = CreateToolButton("Rect", (s, e) => ExecuteMso("ShapeRectangle"));
+            btnRect = CreateToolButton("Rect", (s, e) => ActivateDrawingTool(
+                new[] { "ShapeRectangle" }, 0, "Rectangle"));
             btnRect.BackColor = Color.AliceBlue;
-            btnScribble = CreateToolButton("Scribble", (s, e) => ExecuteLegacyDrawingTool(409));
-            btnScribble.BackColor = Color.AliceBlue;
-            btnCurve = CreateToolButton("Curve", (s, e) => ExecuteLegacyDrawingTool(1041));
-            btnCurve.BackColor = Color.AliceBlue;
-            btnFreeform = CreateToolButton("Freeform", (s, e) => ExecuteLegacyDrawingTool(200));
+            btnFreeform = CreateToolButton("Freeform", (s, e) => ActivateDrawingTool(
+                new[] { "ShapeFreeform", "ShapeFreeformShape", "Freeform", "FreeformTool" }, 200, "Freeform"));
             btnFreeform.BackColor = Color.AliceBlue;
 
-            flowDrawing.Controls.AddRange(new Control[] { btnLine, btnRect, btnScribble, btnCurve, btnFreeform });
+            flowDrawing.Controls.AddRange(new Control[] { btnLine, btnRect, btnFreeform });
 
             // Group: Industrial Efficiency Tools
             GroupBox grpAdvanced = new GroupBox { Text = "Industrial Efficiency Tools", Dock = DockStyle.Fill, Margin = new Padding(3) };
@@ -203,130 +202,239 @@ namespace name_tool
             return btn;
         }
 
-        private void ExecuteLegacyDrawingTool(int controlId)
+        /// <summary>
+        /// Prepares PowerPoint for drawing tool activation by validating prerequisites,
+        /// switching to Normal view, activating the slide editing pane, and transferring
+        /// focus from the WinForms window to the PowerPoint slide surface.
+        /// Returns the active window if successful; null otherwise.
+        /// </summary>
+        private PowerPoint.DocumentWindow PrepareForDrawingTool(string toolName, out IntPtr pptHwnd, out bool attached)
         {
+            pptHwnd = IntPtr.Zero;
+            attached = false;
+
+            // 1. Validate a presentation is open
             try
             {
-                if (pptApp.ActiveWindow == null) return;
-
-                // Ensure Normal view
-                try
+                if (pptApp.Presentations.Count == 0)
                 {
-                    var viewType = pptApp.ActiveWindow.ViewType;
-                    if (viewType != PowerPoint.PpViewType.ppViewNormal &&
-                        viewType != PowerPoint.PpViewType.ppViewSlide)
-                    {
-                        pptApp.ActiveWindow.ViewType = PowerPoint.PpViewType.ppViewNormal;
-                    }
-                }
-                catch { }
-
-                // Get PowerPoint window handle
-                IntPtr pptHwnd = (IntPtr)pptApp.ActiveWindow.HWND;
-
-                // Robust focus transfer
-                uint currentThread = GetCurrentThreadId();
-                uint pptThread = GetWindowThreadProcessId(pptHwnd, IntPtr.Zero);
-
-                bool attached = false;
-                if (currentThread != pptThread)
-                {
-                    attached = AttachThreadInput(currentThread, pptThread, true);
-                }
-
-                try
-                {
-                    BringWindowToTop(pptHwnd);
-                    SetForegroundWindow(pptHwnd);
-                    SetFocus(pptHwnd);
-
-                    System.Threading.Thread.Sleep(30);
-
-                    // Use legacy FindControl with Office Control ID
-                    Office.CommandBarControl ctrl = pptApp.CommandBars.FindControl(Id: controlId);
-                    if (ctrl != null)
-                    {
-                        ctrl.Execute();
-                    }
-                    else
-                    {
-                        MessageBox.Show($"Drawing tool (ID: {controlId}) not available in this PowerPoint version.",
-                            "Tool Not Found", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    }
-                }
-                finally
-                {
-                    if (attached)
-                    {
-                        AttachThreadInput(currentThread, pptThread, false);
-                    }
+                    ShowDrawingToolError(toolName, "No presentation is open. Please open or create a presentation first.");
+                    return null;
                 }
             }
-            catch (Exception ex)
+            catch
             {
-                MessageBox.Show($"Drawing Tool Activation Failed: {ex.Message}\n\nEnsure you have a slide open in Normal view.",
-                    "Drawing Tool Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                ShowDrawingToolError(toolName, "Cannot access PowerPoint. Please ensure it is running.");
+                return null;
+            }
+
+            // 2. Validate active window
+            PowerPoint.DocumentWindow activeWindow;
+            try
+            {
+                activeWindow = pptApp.ActiveWindow;
+                if (activeWindow == null) throw new InvalidOperationException();
+            }
+            catch
+            {
+                ShowDrawingToolError(toolName, "No active PowerPoint window found. Please open a presentation.");
+                return null;
+            }
+
+            // 3. Ensure Normal or Slide view (required for drawing tools)
+            try
+            {
+                var viewType = activeWindow.ViewType;
+                if (viewType != PowerPoint.PpViewType.ppViewNormal &&
+                    viewType != PowerPoint.PpViewType.ppViewSlide)
+                {
+                    activeWindow.ViewType = PowerPoint.PpViewType.ppViewNormal;
+                    System.Threading.Thread.Sleep(100);
+                }
+            }
+            catch
+            {
+                ShowDrawingToolError(toolName, "Cannot switch to Normal view. Please switch manually and try again.");
+                return null;
+            }
+
+            // 4. Validate an active slide exists
+            try
+            {
+                object slideObj = activeWindow.View.Slide;
+                if (slideObj == null) throw new InvalidOperationException();
+            }
+            catch
+            {
+                ShowDrawingToolError(toolName, "No active slide found. Please select or add a slide first.");
+                return null;
+            }
+
+            // 5. Get PowerPoint window handle
+            try
+            {
+                pptHwnd = (IntPtr)activeWindow.HWND;
+            }
+            catch
+            {
+                ShowDrawingToolError(toolName, "Cannot access PowerPoint window handle.");
+                return null;
+            }
+
+            // 6. Transfer focus to PowerPoint's slide editing pane
+            uint currentThread = GetCurrentThreadId();
+            uint pptThread = GetWindowThreadProcessId(pptHwnd, IntPtr.Zero);
+
+            if (currentThread != pptThread)
+            {
+                attached = AttachThreadInput(currentThread, pptThread, true);
+            }
+
+            // Activate the slide editing pane (Pane 2 in Normal view)
+            // This is the critical step — without it, drawing tools fail with E_FAIL
+            try { activeWindow.Panes[2].Activate(); } catch { }
+
+            // Bring PowerPoint window to foreground
+            SetForegroundWindow(pptHwnd);
+            BringWindowToTop(pptHwnd);
+            SetFocus(pptHwnd);
+
+            // Flush pending Windows messages and allow focus to fully stabilize
+            System.Windows.Forms.Application.DoEvents();
+            System.Threading.Thread.Sleep(200);
+
+            return activeWindow;
+        }
+
+        /// <summary>
+        /// Re-activates the slide pane and sets foreground focus on PowerPoint.
+        /// Used between retry attempts to re-establish the drawing context.
+        /// </summary>
+        private void RefocusPowerPoint(PowerPoint.DocumentWindow activeWindow, IntPtr pptHwnd, int delayMs)
+        {
+            try { activeWindow.Panes[2].Activate(); } catch { }
+            SetForegroundWindow(pptHwnd);
+            BringWindowToTop(pptHwnd);
+            SetFocus(pptHwnd);
+            System.Windows.Forms.Application.DoEvents();
+            System.Threading.Thread.Sleep(delayMs);
+        }
+
+        /// <summary>
+        /// Activates a PowerPoint drawing tool using a multi-strategy approach:
+        ///   1. Try each idMso candidate via CommandBars.ExecuteMso (modern Ribbon API)
+        ///   2. Fall back to CommandBars.FindControl with legacy control ID
+        ///   3. Retry with extended delay on E_FAIL (focus/timing issue)
+        /// This handles version differences across Office 2016/2019/2021/365.
+        /// </summary>
+        /// <param name="idMsoCandidates">Possible Ribbon idMso strings to try, in priority order.</param>
+        /// <param name="legacyControlId">Legacy Office CommandBar control ID as fallback (0 to skip).</param>
+        /// <param name="toolName">Human-readable tool name for error messages.</param>
+        private void ActivateDrawingTool(string[] idMsoCandidates, int legacyControlId, string toolName)
+        {
+            IntPtr pptHwnd;
+            bool attached;
+
+            var activeWindow = PrepareForDrawingTool(toolName, out pptHwnd, out attached);
+            if (activeWindow == null) return;
+
+            try
+            {
+                // ---- Strategy 1: Try each idMso candidate (modern Ribbon API) ----
+                foreach (var idMso in idMsoCandidates)
+                {
+                    try
+                    {
+                        pptApp.CommandBars.ExecuteMso(idMso);
+                        return; // Success
+                    }
+                    catch (System.Runtime.InteropServices.COMException comEx)
+                    {
+                        // E_FAIL (0x80004005) = focus/timing issue → retry with delay
+                        if (comEx.ErrorCode == unchecked((int)0x80004005))
+                        {
+                            try
+                            {
+                                System.Threading.Thread.Sleep(300);
+                                RefocusPowerPoint(activeWindow, pptHwnd, 200);
+                                pptApp.CommandBars.ExecuteMso(idMso);
+                                return; // Retry succeeded
+                            }
+                            catch { /* retry also failed, continue to next candidate */ }
+                        }
+                        // For any other COM error (invalid arg, etc.), try next candidate
+                        continue;
+                    }
+                    catch
+                    {
+                        continue; // Non-COM error, try next candidate
+                    }
+                }
+
+                // ---- Strategy 2: Legacy CommandBars.FindControl fallback ----
+                if (legacyControlId > 0)
+                {
+                    try
+                    {
+                        // Re-stabilize focus before legacy call
+                        RefocusPowerPoint(activeWindow, pptHwnd, 150);
+
+                        Office.CommandBarControl ctrl = pptApp.CommandBars.FindControl(Id: legacyControlId);
+                        if (ctrl != null)
+                        {
+                            ctrl.Execute();
+                            return; // Success via legacy
+                        }
+                    }
+                    catch (System.Runtime.InteropServices.COMException comEx)
+                    {
+                        if (comEx.ErrorCode == unchecked((int)0x80004005))
+                        {
+                            // E_FAIL on legacy → one more retry with longer delay
+                            try
+                            {
+                                System.Threading.Thread.Sleep(400);
+                                RefocusPowerPoint(activeWindow, pptHwnd, 300);
+
+                                Office.CommandBarControl ctrlRetry = pptApp.CommandBars.FindControl(Id: legacyControlId);
+                                if (ctrlRetry != null)
+                                {
+                                    ctrlRetry.Execute();
+                                    return; // Legacy retry succeeded
+                                }
+                            }
+                            catch { /* final retry also failed */ }
+                        }
+                    }
+                    catch { /* non-COM legacy error */ }
+                }
+
+                // ---- All strategies exhausted ----
+                ShowDrawingToolError(toolName,
+                    "The tool could not be activated in this PowerPoint version.\n\n" +
+                    "Please try:\n" +
+                    "\u2022 Click on the slide area in PowerPoint first, then try again\n" +
+                    "\u2022 Ensure you are in Normal view (View \u2192 Normal)\n" +
+                    "\u2022 Use Insert \u2192 Shapes from PowerPoint's ribbon directly");
+            }
+            finally
+            {
+                if (attached)
+                {
+                    uint currentThread = GetCurrentThreadId();
+                    uint pptThread = GetWindowThreadProcessId(pptHwnd, IntPtr.Zero);
+                    AttachThreadInput(currentThread, pptThread, false);
+                }
             }
         }
 
-        private void ExecuteMso(string idMso)
+        /// <summary>
+        /// Displays a standardized error message for drawing tool failures.
+        /// </summary>
+        private void ShowDrawingToolError(string toolName, string message)
         {
-            try
-            {
-                if (pptApp.ActiveWindow == null) return;
-
-                // Ensure Normal view (preserves slides panel and all UI elements)
-                try
-                {
-                    var viewType = pptApp.ActiveWindow.ViewType;
-                    if (viewType != PowerPoint.PpViewType.ppViewNormal &&
-                        viewType != PowerPoint.PpViewType.ppViewSlide)
-                    {
-                        pptApp.ActiveWindow.ViewType = PowerPoint.PpViewType.ppViewNormal;
-                    }
-                }
-                catch { }
-
-                // Get PowerPoint window handle
-                IntPtr pptHwnd = (IntPtr)pptApp.ActiveWindow.HWND;
-
-                // Robust focus transfer using thread input attachment
-                uint currentThread = GetCurrentThreadId();
-                uint pptThread = GetWindowThreadProcessId(pptHwnd, IntPtr.Zero);
-
-                bool attached = false;
-                if (currentThread != pptThread)
-                {
-                    attached = AttachThreadInput(currentThread, pptThread, true);
-                }
-
-                try
-                {
-                    // Bring PPT to foreground and set focus
-                    BringWindowToTop(pptHwnd);
-                    SetForegroundWindow(pptHwnd);
-                    SetFocus(pptHwnd);
-
-                    // Brief pause for focus stabilization
-                    System.Threading.Thread.Sleep(30);
-
-                    // Execute the drawing tool
-                    pptApp.CommandBars.ExecuteMso(idMso);
-                }
-                finally
-                {
-                    // Detach thread input
-                    if (attached)
-                    {
-                        AttachThreadInput(currentThread, pptThread, false);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Tool Activation Failed: {ex.Message}\n\nEnsure you have a slide open in Normal view.",
-                    "Drawing Tool Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            }
+            MessageBox.Show(message, $"{toolName} \u2014 Drawing Tool",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
 
         private void ShapeManagerForm_Load(object sender, EventArgs e) { SetPlaceholder(txtSearch, "Search shapes by name..."); LoadShapes(); }

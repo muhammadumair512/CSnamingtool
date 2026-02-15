@@ -53,6 +53,7 @@ namespace name_tool
         private Button btnDistributeH, btnDistributeV;
         private Button btnGroup, btnUngroup, btnDelete, btnSelectAll;
         private Button btnMatchWidth, btnMatchHeight, btnSwap, btnSelectSameType;
+        private Button btnMatchBoth, btnStackH, btnStackV, btnRotate90;
         private Button btnHideAll, btnShowAll;
         private Button btnToFront, btnToBack, btnForward, btnBackward, btnCenterH, btnCenterV;
         private Button btnFreeform, btnRect, btnLine;
@@ -163,6 +164,13 @@ namespace name_tool
 
             btnMatchWidth = CreateToolButton("Match W", (s, e) => MatchSize(true, false));
             btnMatchHeight = CreateToolButton("Match H", (s, e) => MatchSize(false, true));
+            btnMatchBoth = CreateToolButton("Match All", (s, e) => MatchSize(true, true));
+            btnMatchBoth.BackColor = Color.Ivory;
+            
+            btnStackH = CreateToolButton("Stack H", (s, e) => StackShapes(true));
+            btnStackV = CreateToolButton("Stack V", (s, e) => StackShapes(false));
+            btnRotate90 = CreateToolButton("Rot 90°", (s, e) => RotateSelected(90));
+
             btnSwap = CreateToolButton("Swap Pos", (s, e) => SwapShapes());
             btnSelectSameType = CreateToolButton("Same Type", (s, e) => SelectSameType());
             btnSelectAll = CreateToolButton("Sel All", (s, e) => SelectAllShapes());
@@ -177,7 +185,7 @@ namespace name_tool
             btnDelete = CreateToolButton("Delete", (s, e) => DeleteSelected());
             btnDelete.BackColor = Color.MistyRose;
 
-            flowAdvanced.Controls.AddRange(new Control[] { btnMatchWidth, btnMatchHeight, btnSwap, btnSelectSameType, btnSelectAll, btnToFront, btnToBack, btnForward, btnBackward, btnGroup, btnUngroup, btnHideAll, btnShowAll, btnDelete });
+            flowAdvanced.Controls.AddRange(new Control[] { btnMatchWidth, btnMatchHeight, btnMatchBoth, btnStackH, btnStackV, btnRotate90, btnSwap, btnSelectSameType, btnSelectAll, btnToFront, btnToBack, btnForward, btnBackward, btnGroup, btnUngroup, btnHideAll, btnShowAll, btnDelete });
 
             // Options Panel
             FlowLayoutPanel flowOptions = new FlowLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(3), FlowDirection = FlowDirection.LeftToRight };
@@ -469,6 +477,57 @@ namespace name_tool
         private void ToggleAllVisibility(bool visible) { try { var slide = GetActiveSlide(); if (slide == null) return; foreach (PowerPoint.Shape s in slide.Shapes) try { s.Visible = visible ? Office.MsoTriState.msoTrue : Office.MsoTriState.msoFalse; } catch { } LoadShapes(); } catch { } }
         private void GroupSelected() { try { if (pptApp.ActiveWindow.Selection.Type == PowerPoint.PpSelectionType.ppSelectionShapes) { pptApp.ActiveWindow.Selection.ShapeRange.Group(); LoadShapes(); } } catch { } }
         private void UngroupSelected() { try { if (pptApp.ActiveWindow.Selection.Type == PowerPoint.PpSelectionType.ppSelectionShapes) { pptApp.ActiveWindow.Selection.ShapeRange.Ungroup(); LoadShapes(); } } catch { } }
+        private void StackShapes(bool horizontal)
+        {
+            try
+            {
+                if (pptApp.ActiveWindow.Selection.Type == PowerPoint.PpSelectionType.ppSelectionShapes)
+                {
+                    var range = pptApp.ActiveWindow.Selection.ShapeRange;
+                    if (range.Count < 2) return;
+
+                    List<PowerPoint.Shape> sorted = new List<PowerPoint.Shape>();
+                    foreach (PowerPoint.Shape s in range) sorted.Add(s);
+                    
+                    if (horizontal)
+                        sorted.Sort((a, b) => a.Left.CompareTo(b.Left));
+                    else
+                        sorted.Sort((a, b) => a.Top.CompareTo(b.Top));
+
+                    float currentPos = horizontal ? sorted[0].Left + sorted[0].Width : sorted[0].Top + sorted[0].Height;
+
+                    for (int i = 1; i < sorted.Count; i++)
+                    {
+                        if (horizontal)
+                        {
+                            sorted[i].Left = currentPos;
+                            currentPos += sorted[i].Width;
+                        }
+                        else
+                        {
+                            sorted[i].Top = currentPos;
+                            currentPos += sorted[i].Height;
+                        }
+                    }
+                    LoadShapes();
+                }
+            }
+            catch { }
+        }
+
+        private void RotateSelected(float degrees)
+        {
+            try
+            {
+                if (pptApp.ActiveWindow.Selection.Type == PowerPoint.PpSelectionType.ppSelectionShapes)
+                {
+                    pptApp.ActiveWindow.Selection.ShapeRange.IncrementRotation(degrees);
+                    LoadShapes();
+                }
+            }
+            catch { }
+        }
+
         private void LstShapes_AfterLabelEdit(object sender, LabelEditEventArgs e) { if (e.Label == null) return; try { ListViewItem item = lstShapes.Items[e.Item]; if (item.Tag is PowerPoint.Shape s) s.Name = e.Label; } catch { e.CancelEdit = true; } }
 
         private PowerPoint.Slide GetActiveSlide()

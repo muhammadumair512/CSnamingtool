@@ -662,81 +662,191 @@ try {
             var docW = doc.width.as('px');
             var docH = doc.height.as('px');
 
-            // Store the selection into an alpha channel before duplicating
+            // Store the selection into a named alpha channel (survives duplicate + flatten)
             var selChannel = doc.channels.add();
             selChannel.name = 'PPTQuickSelMask';
+            selChannel.kind = ChannelType.SELECTEDAREA;
             doc.selection.store(selChannel);
 
+            // Duplicate the entire document (includes alpha channels)
             var dupDoc = doc.duplicate('QuickSelectCutout');
 
-            // Ensure RGB mode for proper PNG transparency
+            // Ensure RGB mode (required for proper transparency in PNG)
             if (dupDoc.mode !== DocumentMode.RGB) {
                 dupDoc.changeMode(ChangeMode.RGB);
             }
 
-            // Flatten all layers into one
+            // Flatten all layers into a single Background layer
             dupDoc.flatten();
 
-            // Unlock background layer to allow transparency
-            if (dupDoc.activeLayer.isBackgroundLayer) {
-                dupDoc.activeLayer.isBackgroundLayer = false;
-            }
+            // Convert Background to regular layer (Background cannot have transparency)
+            dupDoc.activeLayer.isBackgroundLayer = false;
             dupDoc.activeLayer.name = 'Cutout';
 
-            // Restore selection from the saved alpha channel
-            var dupSelChannel = null;
-            for (var i = 0; i < dupDoc.channels.length; i++) {
-                if (dupDoc.channels[i].name === 'PPTQuickSelMask') {
-                    dupSelChannel = dupDoc.channels[i];
+            // Find the stored selection mask in the duplicate
+            var maskChan = null;
+            for (var c = 0; c < dupDoc.channels.length; c++) {
+                if (dupDoc.channels[c].name === 'PPTQuickSelMask') {
+                    maskChan = dupDoc.channels[c];
                     break;
                 }
             }
-            if (dupSelChannel !== null) {
-                dupDoc.selection.load(dupSelChannel);
-                dupSelChannel.remove();
-            }
 
-            // Invert: select everything EXCEPT user's selection
-            dupDoc.selection.invert();
+            if (maskChan === null) {
+                writeResult('ERROR:Selection mask channel not found after duplicate.');
+                dupDoc.close(SaveOptions.DONOTSAVECHANGES);
+            } else {
+                // Load the stored selection back as marching ants
+                dupDoc.selection.load(maskChan, SelectionType.REPLACE);
+                maskChan.remove();
 
-            // Clear the inverse — creates transparency around the selection
-            dupDoc.activeLayer.clear();
+                // ╔═══════════════════════════════════════════════════════════╗
+                // ║  CREATE TRANSPARENCY VIA LAYER MASK                      ║
+                // ║  This is the professional Photoshop method:              ║
+                // ║  - Layer mask from selection = white(visible)/black(hide)║
+                // ║  - Apply mask = bake transparency into actual pixels     ║
+                // ╚═══════════════════════════════════════════════════════════╝
+                var usedMask = false;
+                try {
+                    // Create layer mask: ""Reveal Selection""
+                    // Selected area → white (visible), rest → black (hidden)
+                    var mkDesc = new ActionDescriptor();
+                    mkDesc.putClass(charIDToTypeID('Nw  '), charIDToTypeID('Chnl'));
+                    var mkRef = new ActionReference();
+                    mkRef.putEnumerated(
+                        charIDToTypeID('Chnl'),
+                        charIDToTypeID('Chnl'),
+                        charIDToTypeID('Msk '));
+                    mkDesc.putReference(charIDToTypeID('At  '), mkRef);
+                    mkDesc.putEnumerated(
+                        charIDToTypeID('Usng'),
+                        charIDToTypeID('UsrM'),
+                        charIDToTypeID('RvlS'));
+                    executeAction(charIDToTypeID('Mk  '), mkDesc, DialogModes.NO);
 
-            // Deselect
-            dupDoc.selection.deselect();
+                    // Apply (flatten) the layer mask into the layer pixels
+                    // Hidden areas become truly transparent pixels
+                    var apDesc = new ActionDescriptor();
+                    var apRef = new ActionReference();
+                    apRef.putEnumerated(
+                        charIDToTypeID('Chnl'),
+                        charIDToTypeID('Chnl'),
+                        charIDToTypeID('Msk '));
+                    apDesc.putReference(charIDToTypeID('null'), apRef);
+                    apDesc.putBoolean(charIDToTypeID('Aply'), true);
+                    executeAction(charIDToTypeID('Dlt '), apDesc, DialogModes.NO);
 
-            // Crop to the selection bounding box
-            dupDoc.crop([
-                new UnitValue(selL, 'px'),
-                new UnitValue(selT, 'px'),
-                new UnitValue(selR, 'px'),
-                new UnitValue(selB, 'px')
-            ]);
+                    usedMask = true;
+                } catch(maskErr) {
+                    // Layer mask failed — fallback to select-invert-delete
+                    usedMask = false;
+                }
 
-            // Save as transparent PNG-24
-            var outFile = new File('__CUTOUT__');
-            var outFolder = outFile.parent;
-            if (!outFolder.exists) outFolder.create();
-
-            var pngOpts = new PNGSaveOptions();
-            pngOpts.compression = 6;
-            pngOpts.interlaced = false;
-            dupDoc.saveAs(outFile, pngOpts, true, Extension.LOWERCASE);
-
-            dupDoc.close(SaveOptions.DONOTSAVECHANGES);
-
-            // Clean up: remove temp channel from original and close
-            try {
-                for (var j = 0; j < doc.channels.length; j++) {
-                    if (doc.channels[j].name === 'PPTQuickSelMask') {
-                        doc.channels[j].remove();
-                        break;
+                if (!usedMask) {
+                    // Fallback: reload selection, invert, delete
+                    // Re-add the alpha channel from original doc
+                    try {
+                        // We already removed maskChan, so re-select
+                        // The selection should still be active from the load above
+                        dupDoc.selection.invert();
+                        dupDoc.activeLayer.clear();
+                    } catch(clearErr) {
+                        writeResult('ERROR:Could not create transparency: ' + clearErr.message);
+                        dupDoc.close(SaveOptions.DONOTSAVECHANGES);
+                        doc.close(SaveOptions.DONOTSAVECHANGES);
                     }
                 }
-            } catch(chErr) {}
-            doc.close(SaveOptions.DONOTSAVECHANGES);
 
-            writeResult('' + selL + ',' + selT + ',' + selR + ',' + selB + ',' + docW + ',' + docH);
+                // Deselect all
+                try { dupDoc.selection.deselect(); } catch(ds) {}
+
+                // Crop to the original selection bounding box
+                dupDoc.crop([
+                    new UnitValue(selL, 'px'),
+                    new UnitValue(selT, 'px'),
+                    new UnitValue(selR, 'px'),
+                    new UnitValue(selB, 'px')
+                ]);
+
+                // ╔═══════════════════════════════════════════════════════════╗
+                // ║  SAVE AS TRANSPARENT PNG-24                              ║
+                // ║  Strategy 1: Save For Web (explicit transparency flag)   ║
+                // ║  Strategy 2: saveAs with PNGSaveOptions (fallback)       ║
+                // ╚═══════════════════════════════════════════════════════════╝
+                var outFile = new File('__CUTOUT__');
+                var outFolder = outFile.parent;
+                if (!outFolder.exists) outFolder.create();
+
+                var saved = false;
+
+                // Strategy 1: Save For Web — guarantees PNG-24 alpha channel
+                if (!saved) {
+                    try {
+                        var sfwOpts = new ExportOptionsSaveForWeb();
+                        sfwOpts.format = SaveDocumentType.PNG;
+                        sfwOpts.PNG8 = false;
+                        sfwOpts.transparency = true;
+                        sfwOpts.includeProfile = false;
+                        sfwOpts.optimized = true;
+                        dupDoc.exportDocument(outFile, ExportType.SAVEFORWEB, sfwOpts);
+                        saved = outFile.exists;
+                    } catch(sfwErr) {
+                        // Save For Web failed — try next strategy
+                    }
+                }
+
+                // Strategy 2: Standard saveAs with PNGSaveOptions
+                if (!saved) {
+                    try {
+                        var pngOpts = new PNGSaveOptions();
+                        pngOpts.compression = 6;
+                        pngOpts.interlaced = false;
+                        dupDoc.saveAs(outFile, pngOpts, true, Extension.LOWERCASE);
+                        saved = true;
+                    } catch(pngErr) {}
+                }
+
+                // Strategy 3: Save as TIFF with transparency then convert
+                if (!saved) {
+                    try {
+                        var tiffFile = new File(outFile.fsName.replace(/\.png$/i, '.tif'));
+                        var tiffOpts = new TiffSaveOptions();
+                        tiffOpts.alphaChannels = true;
+                        tiffOpts.transparency = true;
+                        tiffOpts.layers = false;
+                        dupDoc.saveAs(tiffFile, tiffOpts, true, Extension.LOWERCASE);
+                        // Re-open and save as PNG
+                        var tDoc = app.open(tiffFile);
+                        var pngOpts2 = new PNGSaveOptions();
+                        pngOpts2.compression = 6;
+                        tDoc.saveAs(outFile, pngOpts2, true, Extension.LOWERCASE);
+                        tDoc.close(SaveOptions.DONOTSAVECHANGES);
+                        tiffFile.remove();
+                        saved = true;
+                    } catch(tifErr) {}
+                }
+
+                if (!saved) {
+                    writeResult('ERROR:All PNG save methods failed.');
+                }
+
+                dupDoc.close(SaveOptions.DONOTSAVECHANGES);
+
+                // Clean up: remove temp alpha channel from original doc, then close it
+                try {
+                    for (var j = 0; j < doc.channels.length; j++) {
+                        if (doc.channels[j].name === 'PPTQuickSelMask') {
+                            doc.channels[j].remove();
+                            break;
+                        }
+                    }
+                } catch(chErr) {}
+                doc.close(SaveOptions.DONOTSAVECHANGES);
+
+                if (saved) {
+                    writeResult('' + selL + ',' + selT + ',' + selR + ',' + selB + ',' + docW + ',' + docH);
+                }
+            }
         }
     }
 } catch(globalErr) {

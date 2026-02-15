@@ -10,6 +10,13 @@
                   onAction="OnOpenManagerClick"
                   description="Open the advanced shape management tool to isolate and reorder objects."/>
         </group>
+        <group id="groupImageTools" label="Image Tools">
+          <button id="btnQuickSelect" label="Quick Select" 
+                  size="large" 
+                  imageMso="ObjectsSelect" 
+                  onAction="OnQuickSelectClick"
+                  description="Select any area of an image using Adobe Photoshop Quick Selection, then import it as an independent shape for animation."/>
+        </group>
       </tab>
     </tabs>
   </ribbon>

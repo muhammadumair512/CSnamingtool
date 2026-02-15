@@ -209,6 +209,9 @@
     <Compile Include="ShapeManagerForm.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="QuickSelectHelper.cs">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="Ribbon1.cs">
       <SubType>Code</SubType>
     </Compile>

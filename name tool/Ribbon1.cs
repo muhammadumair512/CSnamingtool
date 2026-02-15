@@ -53,6 +53,19 @@ namespace name_tool
             }
         }
 
+        public void OnQuickSelectClick(Office.IRibbonControl control)
+        {
+            try
+            {
+                QuickSelectHelper.Execute(Globals.ThisAddIn.Application);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Error in Quick Select: " + ex.Message, "Quick Select",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
         public System.Drawing.Image GetImage(Office.IRibbonControl control)
         {
             try

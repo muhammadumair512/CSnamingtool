@@ -770,32 +770,20 @@ try {
 
                 // ╔═══════════════════════════════════════════════════════════╗
                 // ║  SAVE AS TRANSPARENT PNG-24                              ║
-                // ║  Strategy 1: Save For Web (explicit transparency flag)   ║
-                // ║  Strategy 2: saveAs with PNGSaveOptions (fallback)       ║
-                // ╚═══════════════════════════════════════════════════════════╝
+                // ║  Strategy 1: saveAs with PNGSaveOptions (most reliable)  ║
+                // ║  Strategy 2: Save via TIFF then convert (fallback)       ║
+                // ╚═════════════════════════════════════════════════════════╝
                 var outFile = new File('__CUTOUT__');
                 var outFolder = outFile.parent;
                 if (!outFolder.exists) outFolder.create();
 
                 var saved = false;
 
-                // Strategy 1: Save For Web — guarantees PNG-24 alpha channel
-                if (!saved) {
-                    try {
-                        var sfwOpts = new ExportOptionsSaveForWeb();
-                        sfwOpts.format = SaveDocumentType.PNG;
-                        sfwOpts.PNG8 = false;
-                        sfwOpts.transparency = true;
-                        sfwOpts.includeProfile = false;
-                        sfwOpts.optimized = true;
-                        dupDoc.exportDocument(outFile, ExportType.SAVEFORWEB, sfwOpts);
-                        saved = outFile.exists;
-                    } catch(sfwErr) {
-                        // Save For Web failed — try next strategy
-                    }
-                }
+                // Suppress all Photoshop dialogs during save
+                var oldDialogs = app.displayDialogs;
+                app.displayDialogs = DialogModes.NO;
 
-                // Strategy 2: Standard saveAs with PNGSaveOptions
+                // Strategy 1: Standard saveAs with PNGSaveOptions
                 if (!saved) {
                     try {
                         var pngOpts = new PNGSaveOptions();
@@ -806,7 +794,7 @@ try {
                     } catch(pngErr) {}
                 }
 
-                // Strategy 3: Save as TIFF with transparency then convert
+                // Strategy 2: Save as TIFF with transparency then convert
                 if (!saved) {
                     try {
                         var tiffFile = new File(outFile.fsName.replace(/\.png$/i, '.tif'));
@@ -829,6 +817,9 @@ try {
                 if (!saved) {
                     writeResult('ERROR:All PNG save methods failed.');
                 }
+
+                // Restore dialog mode
+                app.displayDialogs = oldDialogs;
 
                 dupDoc.close(SaveOptions.DONOTSAVECHANGES);
 
@@ -887,13 +878,20 @@ try {
                 Text = "Quick Select \u2014 Control Panel",
                 Size = new Size(440, 330),
                 FormBorderStyle = FormBorderStyle.FixedDialog,
-                StartPosition = FormStartPosition.CenterScreen,
+                StartPosition = FormStartPosition.Manual,
                 MaximizeBox = false,
                 MinimizeBox = false,
                 TopMost = true,
                 ShowIcon = false,
                 BackColor = Color.White
             };
+
+            // Position on the right edge of the primary screen
+            var screen = Screen.PrimaryScreen.WorkingArea;
+            form.Location = new Point(
+                screen.Right - form.Width - 10,   // 10px from right edge
+                screen.Top + (screen.Height - form.Height) / 2  // vertically centered
+            );
 
             var headerLabel = new Label
             {
